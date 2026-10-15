@@ -1,0 +1,67 @@
+body { 
+    font-family: 'Inter', sans-serif; 
+    background-color: #f3f4f6; 
+    overscroll-behavior-y: none; 
+}
+
+#map { 
+    height: 300px; 
+    width: 100%; 
+    z-index: 1; 
+    border-radius: 0.5rem; 
+}
+
+.tab-content { 
+    display: none; 
+}
+
+.tab-content.active { 
+    display: block; 
+}
+
+.bottom-nav { 
+    padding-bottom: env(safe-area-inset-bottom); 
+}
+
+.leaflet-interactive { 
+    cursor: crosshair; 
+}
+
+#reportMapContainer { 
+    min-height: 250px; 
+}
+
+.leaflet-container { 
+    z-index: 0 !important; 
+}
+
+/* Estilos para tabla histórica */
+#tableContainer table { 
+    border-collapse: collapse; 
+    width: 100%; 
+}
+
+#tableContainer th, 
+#tableContainer td { 
+    border: 1px solid #e2e8f0; 
+    padding: 6px 8px; 
+}
+
+#tableContainer thead th { 
+    position: sticky; 
+    top: 0; 
+    z-index: 5; 
+}
+
+#tableContainer .sticky-col { 
+    position: sticky; 
+    left: 0; 
+    z-index: 10; 
+    background-color: white; 
+}
+
+#tableContainer thead .sticky-col { 
+    z-index: 15; 
+    background-color: #0f172a; 
+    color: white; 
+}
