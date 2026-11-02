@@ -12,11 +12,16 @@ body {
 }
 
 .tab-content { 
-    display: none; 
+    display: none !important; 
 }
 
 .tab-content.active { 
-    display: block; 
+    display: block !important; 
+}
+
+/* El mapa necesita flexbox para no aplastarse, forzamos su visualización correcta */
+#tab-zonas.tab-content.active { 
+    display: flex !important; 
 }
 
 .bottom-nav { 
@@ -64,4 +69,34 @@ body {
     z-index: 15; 
     background-color: #0f172a; 
     color: white; 
+}
+
+/* Estilos personalizados para la barra de scroll de los sectores */
+.sector-scroll::-webkit-scrollbar {
+    width: 6px;
+}
+.sector-scroll::-webkit-scrollbar-track {
+    background: #f1f5f9; 
+    border-radius: 4px;
+}
+.sector-scroll::-webkit-scrollbar-thumb {
+    background: #10b981; 
+    border-radius: 4px;
+}
+.sector-scroll::-webkit-scrollbar-thumb:hover {
+    background: #059669; 
+}
+
+/* =========================================================
+   OPTIMIZACIÓN PARA EXPORTACIÓN A PDF (SALTOS DE PÁGINA)
+   ========================================================= */
+@media print {
+    .print-avoid-break {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+    .sector-scroll {
+        max-height: none !important;
+        overflow: visible !important;
+    }
 }

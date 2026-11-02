@@ -208,8 +208,11 @@ function generateReport() {
         if (evals.length === 0) return;
         totalGeneral += evals.length;
 
-        html += `<div class="mb-8 border-4 border-emerald-600 rounded-xl p-4 bg-white shadow-md page-break-inside-avoid">`;
-        html += `<h2 class="text-2xl font-black text-emerald-900 mb-4 bg-emerald-100 p-3 rounded-lg text-center uppercase tracking-widest">Sector: ${targetZone.name} <span class="text-sm normal-case font-bold text-emerald-700 ml-2">(${evals.length} árboles evaluados)</span></h2>`;
+        html += `<div class="mb-8 border-4 border-emerald-600 rounded-xl p-4 bg-white shadow-md page-break-inside-avoid flex flex-col print-avoid-break">`;
+        html += `<h2 class="text-2xl font-black text-emerald-900 mb-4 bg-emerald-100 p-3 rounded-lg text-center uppercase tracking-widest shrink-0">Sector: ${targetZone.name} <span class="text-sm normal-case font-bold text-emerald-700 ml-2">(${evals.length} árboles evaluados)</span></h2>`;
+        
+        // Contenedor con altura máxima y scroll interno, deshabilitado al imprimir (PDF)
+        html += `<div class="max-h-[60vh] overflow-y-auto pr-2 print:max-h-none print:overflow-visible sector-scroll">`;
 
         appData.categories.forEach(cat => {
             if (cat.items.length === 0) return;
@@ -353,7 +356,8 @@ function generateReport() {
             });
             html += `</div></div>`;
         });
-        html += `</div>`;
+        html += `</div>`; // Cierra el div del scroll (.sector-scroll)
+        html += `</div>`; // Cierra la tarjeta del sector
     });
 
     if (totalGeneral === 0) stats.innerHTML = `<p class="text-center font-bold text-slate-400 py-8">0 árboles evaluados en este rango/selección.</p>`;
@@ -398,7 +402,8 @@ function generateTableReport() {
 
             const titleHeader = diffTreeType ? `${zoneName} <span class="text-blue-200">| Variedad: ${treeTypeName}</span>` : zoneName;
 
-            html += `<div class="mb-8">`;
+            // ✅ MODIFICADO: Añadida clase print-avoid-break
+            html += `<div class="mb-8 print-avoid-break">`;
             html += `<table class="w-full text-sm text-left whitespace-nowrap">`;
 
             html += `<thead class="text-xs uppercase bg-slate-800 text-white">`;
@@ -437,7 +442,8 @@ function generateTableReport() {
                 const dayEvals = grouped[zId][tId][date];
                 const dateFormatted = date.split('-').reverse().join('/');
 
-                html += `<tr class="bg-white border-b hover:bg-emerald-50">`;
+                // ✅ MODIFICADO: Añadida clase print-avoid-break
+                html += `<tr class="bg-white border-b hover:bg-emerald-50 print-avoid-break">`;
                 html += `<td class="px-4 py-3 border border-slate-200 font-bold text-slate-700 sticky left-0 bg-white z-10">${dateFormatted} <span class="text-xs font-normal text-slate-400 ml-1">(n=${dayEvals.length})</span></td>`;
 
                 appData.categories.forEach(cat => {

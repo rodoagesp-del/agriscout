@@ -3,8 +3,22 @@
 // =========================================================
 
 function initMap() {
-    map = L.map('map').setView([-12.0464, -77.0428], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    // Definir capas base
+    const mapaNormal = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 });
+    const mapaSatelite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Tiles &copy; Esri' });
+
+    // Iniciar mapa con satélite por defecto
+    map = L.map('map', {
+        layers: [mapaSatelite] 
+    }).setView([-12.0464, -77.0428], 13);
+
+    // Control para alternar capas
+    const baseMaps = {
+        "Vista Satélite": mapaSatelite,
+        "Mapa Normal (Calles)": mapaNormal
+    };
+    L.control.layers(baseMaps).addTo(map);
+
     map.addLayer(drawnItems);
     map.addLayer(drawingMarkers);
     renderZonesOnMap();
@@ -57,18 +71,23 @@ function renderZonesOnMap() {
 
     appData.zones.forEach(zone => {
         if (zone.polygon && zone.polygon.length > 2) {
+            // ✅ MODIFICADO: Se añade zoneId al options para poder encontrarlo después
             L.polygon(zone.polygon, {
-                color: '#10b981', fillColor: '#10b981', fillOpacity: 0.2, weight: 3
+                color: '#10b981', fillColor: '#10b981', fillOpacity: 0.2, weight: 3, zoneId: zone.id
             }).addTo(drawnItems).bindPopup(`<b>Sector: ${zone.name}</b>`);
         }
 
+        // ✅ MODIFICADO: Se añade botón de editar junto al de eliminar
         listEl.innerHTML += `
         <li class="py-3 flex justify-between items-center border-b last:border-0">
             <div class="flex flex-col">
                 <span class="font-bold text-slate-700">${zone.name}</span>
                 <span class="text-xs text-slate-500"><i class="fa-solid fa-tree text-emerald-500"></i> ${zone.totalTrees || 0} árboles totales</span>
             </div>
-            <button onclick="deleteZone('${zone.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition"><i class="fa-solid fa-trash"></i></button>
+            <div class="flex gap-2">
+                <button onclick="toggleEditZone('${zone.id}', this)" class="text-blue-500 hover:bg-blue-50 p-2 rounded transition" title="Editar vértices"><i class="fa-solid fa-pen-to-square"></i></button>
+                <button onclick="deleteZone('${zone.id}')" class="text-red-500 hover:bg-red-50 p-2 rounded transition" title="Eliminar sector"><i class="fa-solid fa-trash"></i></button>
+            </div>
         </li>`;
     });
 
@@ -153,5 +172,31 @@ function deleteZone(id) {
         appData.zones = appData.zones.filter(z => z.id !== id);
         saveData();
         renderZonesOnMap();
+    }
+}
+
+// ✅ NUEVA FUNCIÓN: Maneja la edición de vértices de zonas
+function toggleEditZone(id, btnElement) {
+    const layer = drawnItems.getLayers().find(l => l.options.zoneId === id);
+    if (!layer) return;
+
+    if (layer.pm.enabled()) {
+        // Desactivar edición y guardar
+        layer.pm.disable();
+        const newCoords = layer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
+        const zoneIndex = appData.zones.findIndex(z => z.id === id);
+        if (zoneIndex > -1) {
+            appData.zones[zoneIndex].polygon = newCoords;
+            saveData();
+            showToast("✅ Sector actualizado");
+        }
+        btnElement.classList.replace('text-green-500', 'text-blue-500');
+        btnElement.innerHTML = '<i class="fa-solid fa-pen-to-square"></i>';
+    } else {
+        // Activar edición
+        layer.pm.enable({ allowSelfIntersection: false });
+        btnElement.classList.replace('text-blue-500', 'text-green-500');
+        btnElement.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
+        showToast("Arrastra los vértices blancos para editar y presiona guardar");
     }
 }

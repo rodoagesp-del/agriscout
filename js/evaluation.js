@@ -142,19 +142,27 @@ function cancelEvaluation() {
     document.getElementById('evaluationForm').classList.add('hidden');
 }
 
+// ✅ MODIFICADA: Validación estricta de campos vacíos
 function saveEvaluation() {
     if (appData.treeTypes && appData.treeTypes.length > 0) {
         const selectedType = document.getElementById('evalTreeTypeSelect').value;
         currentEvaluation.treeTypeId = selectedType !== "" ? selectedType : null;
     }
 
+    // Validación estricta de campos vacíos
+    let formIncompleto = false;
     appData.categories.forEach(cat => {
         cat.items.forEach(item => {
             if (!currentEvaluation.data[item.id] || currentEvaluation.data[item.id].presence === undefined) {
-                currentEvaluation.data[item.id] = { presence: false, severity: null };
+                formIncompleto = true;
             }
         });
     });
+
+    if (formIncompleto) {
+        return showToast("⚠️ Error: Debes calificar todas las opciones (Presencia o Ausencia) antes de guardar.");
+    }
+
     appData.evaluations.push(currentEvaluation);
     saveData();
     showToast("✅ Árbol guardado correctamente en su sector");
