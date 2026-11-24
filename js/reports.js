@@ -519,10 +519,12 @@ function generateChartReport() {
 
     const chartNoData = document.getElementById('chartNoDataMsg');
     const canvasContainer = document.getElementById('evolutionChart').parentElement;
+    const summaryContainer = document.getElementById('chartEvolutionSummary');
 
     if (evals.length === 0) {
         chartNoData.classList.remove('hidden');
         canvasContainer.classList.add('hidden');
+        if (summaryContainer) summaryContainer.classList.add('hidden');
         return;
     }
 
@@ -545,6 +547,7 @@ function generateChartReport() {
     if (sortedWeeks.length === 0) {
         chartNoData.classList.remove('hidden');
         canvasContainer.classList.add('hidden');
+        if (summaryContainer) summaryContainer.classList.add('hidden');
         return;
     }
 
@@ -577,6 +580,38 @@ function generateChartReport() {
         }
     });
 
+    // --- CÁLCULO DE LÍMITES 3 SIGMA (ÚLTIMOS 3 MESES / 90 DÍAS) ---
+    let limits = null;
+    if (dataPoints.length >= 2) {
+        const latestTime = sortedWeeks[sortedWeeks.length - 1].sortKey;
+        const threeMonthsMs = 90 * 24 * 60 * 60 * 1000;
+        const cutoffTime = latestTime - threeMonthsMs;
+
+        // Tomar solo las semanas dentro de los últimos 3 meses (o todas si hay menos de 3 meses)
+        const recentPoints = [];
+        sortedWeeks.forEach((w, idx) => {
+            if (w.sortKey >= cutoffTime) {
+                recentPoints.push(dataPoints[idx]);
+            }
+        });
+
+        const basePoints = recentPoints.length >= 2 ? recentPoints : dataPoints;
+        const mean = basePoints.reduce((acc, v) => acc + v, 0) / basePoints.length;
+        const variance = basePoints.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / basePoints.length;
+        const stdDev = Math.sqrt(variance);
+
+        const upperLimit = isQuant ? (mean + 3 * stdDev) : Math.min(100, mean + 3 * stdDev);
+        const lowerLimit = Math.max(0, mean - 3 * stdDev);
+
+        limits = {
+            mean,
+            stdDev,
+            upperLimit,
+            lowerLimit,
+            weeksUsed: basePoints.length
+        };
+    }
+
     const zoneName = zoneId === 'all' ? 'Todos los sectores' : (appData.zones.find(z => z.id === zoneId)?.name || 'Sector');
     document.getElementById('chartTitle').textContent = `Evolución: ${item.name}`;
     document.getElementById('chartSubtitle').textContent = `${zoneName} | ${isQuant ? 'Promedio Numérico' : '% Incidencia de Afectados'}`;
@@ -602,6 +637,30 @@ function generateChartReport() {
         tension: 0.3
     }];
 
+    // Agregar líneas punteadas de límites LSC y LIC (+3σ / -3σ)
+    if (limits) {
+        datasets.push({
+            label: `Lím. Superior (+3σ): ${limits.upperLimit.toFixed(1)}${isQuant ? '' : '%'}`,
+            data: new Array(dataPoints.length).fill(parseFloat(limits.upperLimit.toFixed(2))),
+            borderColor: '#ef4444',
+            borderWidth: 1.5,
+            borderDash: [6, 6],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false
+        });
+        datasets.push({
+            label: `Lím. Inferior (-3σ): ${limits.lowerLimit.toFixed(1)}${isQuant ? '' : '%'}`,
+            data: new Array(dataPoints.length).fill(parseFloat(limits.lowerLimit.toFixed(2))),
+            borderColor: '#f59e0b',
+            borderWidth: 1.5,
+            borderDash: [6, 6],
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            fill: false
+        });
+    }
+
     chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
@@ -612,14 +671,20 @@ function generateChartReport() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 14,
+                        font: { size: 11, weight: 'bold' }
+                    }
+                },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
                             let label = context.dataset.label || '';
-                            if (label) label += ': ';
-                            if (context.parsed.y !== null) {
-                                label += context.parsed.y + (isQuant ? '' : '%');
+                            if (context.datasetIndex === 0 && context.parsed.y !== null) {
+                                return `${label}: ${context.parsed.y}${isQuant ? '' : '%'}`;
                             }
                             return label;
                         }
@@ -645,6 +710,121 @@ function generateChartReport() {
             }
         }
     });
+
+    // Renderizar el resumen de evolución con los límites 3σ de los últimos 3 meses
+    renderChartEvolutionSummary(dataPoints, sortedWeeks, isQuant, limits);
+}
+
+function renderChartEvolutionSummary(dataPoints, sortedWeeks, isQuant, limits) {
+    const container = document.getElementById('chartEvolutionSummary');
+    if (!container) return;
+
+    container.classList.remove('hidden');
+    const unit = isQuant ? '' : '%';
+
+    if (dataPoints.length < 2 || !limits) {
+        container.innerHTML = `
+            <div class="p-3 rounded-lg border border-slate-200 bg-slate-50 text-center text-xs font-bold text-slate-500">
+                <i class="fa-solid fa-circle-info mr-1"></i>
+                Se necesitan al menos 2 semanas registradas para calcular el porcentaje de cambio y los límites de control (3σ).
+            </div>`;
+        return;
+    }
+
+    // 1. Comparación con la medición/semana anterior
+    const currentVal = dataPoints[dataPoints.length - 1];
+    const prevVal = dataPoints[dataPoints.length - 2];
+    const diff = currentVal - prevVal;
+
+    let pctText = '0.0%';
+    if (prevVal === 0) {
+        pctText = currentVal > 0 ? '+100%' : '0.0%';
+    } else {
+        const pctChange = ((diff / prevVal) * 100).toFixed(1);
+        pctText = (diff > 0 ? '+' : '') + pctChange + '%';
+    }
+
+    const { mean, upperLimit, lowerLimit, weeksUsed } = limits;
+
+    // 2. Evaluar posición respecto a los límites 3σ de los últimos 3 meses
+    let historyBadge = '';
+    if (currentVal > upperLimit) {
+        historyBadge = `
+            <div class="mt-2 p-2 rounded bg-white/70 border border-current text-xs font-bold flex items-center justify-center gap-1">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                Supera el límite superior histórico LSC (${upperLimit.toFixed(1)}${unit})
+            </div>`;
+    } else if (currentVal < lowerLimit) {
+        historyBadge = `
+            <div class="mt-2 p-2 rounded bg-white/70 border border-current text-xs font-bold flex items-center justify-center gap-1">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                Por debajo del límite inferior histórico LIC (${lowerLimit.toFixed(1)}${unit})
+            </div>`;
+    } else {
+        historyBadge = `
+            <div class="mt-2 p-2 rounded bg-white/70 border border-slate-300 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1">
+                <i class="fa-solid fa-check-circle text-emerald-600"></i>
+                Dentro del rango de control 3σ (${lowerLimit.toFixed(1)}${unit} - ${upperLimit.toFixed(1)}${unit})
+            </div>`;
+    }
+
+    // 3. Estilos según incremento (verde + flecha arriba) o disminución (rojo + flecha abajo)
+    let cardStyle = 'bg-slate-50 border-slate-300 text-slate-700';
+    let iconHTML = '<i class="fa-solid fa-minus text-2xl"></i>';
+    let statusLabel = 'Sin cambios respecto a la medición anterior';
+
+    if (diff > 0) {
+        cardStyle = 'bg-emerald-50 border-emerald-400 text-emerald-800';
+        iconHTML = '<i class="fa-solid fa-arrow-up text-2xl"></i>';
+        statusLabel = 'Incremento / Mejora respecto a la medición anterior';
+    } else if (diff < 0) {
+        cardStyle = 'bg-red-50 border-red-400 text-red-800';
+        iconHTML = '<i class="fa-solid fa-arrow-down text-2xl"></i>';
+        statusLabel = 'Disminución respecto a la medición anterior';
+    }
+
+    const prevLabel = sortedWeeks[sortedWeeks.length - 2].label.replace('\n', ' ');
+    const currLabel = sortedWeeks[sortedWeeks.length - 1].label.replace('\n', ' ');
+
+    container.innerHTML = `
+        <div class="p-4 rounded-xl border-2 shadow-sm ${cardStyle}">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-white/80 flex items-center justify-center shadow-sm shrink-0">
+                        ${iconHTML}
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold uppercase tracking-wider opacity-80">${statusLabel}</p>
+                        <p class="text-2xl font-black">${pctText}</p>
+                    </div>
+                </div>
+                <div class="text-right text-xs font-semibold opacity-90">
+                    <div>Anterior (${prevLabel}): <b>${prevVal}${unit}</b></div>
+                    <div>Actual (${currLabel}): <b>${currentVal}${unit}</b></div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-current/20 text-center text-xs">
+                <div class="bg-white/60 rounded p-1.5">
+                    <span class="block text-[10px] uppercase opacity-75 font-bold">LIC (-3σ)</span>
+                    <span class="font-black">${lowerLimit.toFixed(1)}${unit}</span>
+                </div>
+                <div class="bg-white/60 rounded p-1.5">
+                    <span class="block text-[10px] uppercase opacity-75 font-bold">Prom. (3 meses)</span>
+                    <span class="font-black">${mean.toFixed(1)}${unit}</span>
+                </div>
+                <div class="bg-white/60 rounded p-1.5">
+                    <span class="block text-[10px] uppercase opacity-75 font-bold">LSC (+3σ)</span>
+                    <span class="font-black">${upperLimit.toFixed(1)}${unit}</span>
+                </div>
+            </div>
+
+            ${historyBadge}
+            <p class="text-[10px] text-center opacity-70 mt-2 font-medium">
+                Base estadística: últimos 3 meses (${weeksUsed} semanas muestreadas)
+            </p>
+        </div>
+    `;
 }
 
 // --- FUNCIONES DE EXPORTACIÓN ---

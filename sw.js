@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agriscout-cache-v2'; // v2 para forzar la actualización
+const CACHE_NAME = 'agriscout-cache-v4'; // v4 para límites 3 sigma (últimos 3 meses) y líneas
 const urlsToCache = [
     './',
     './index.html',

@@ -142,14 +142,14 @@ function cancelEvaluation() {
     document.getElementById('evaluationForm').classList.add('hidden');
 }
 
-// ✅ MODIFICADA: Validación estricta de campos vacíos
+// ✅ MODIFICADA: Validación flexible con advertencia para campos vacíos
 function saveEvaluation() {
     if (appData.treeTypes && appData.treeTypes.length > 0) {
         const selectedType = document.getElementById('evalTreeTypeSelect').value;
         currentEvaluation.treeTypeId = selectedType !== "" ? selectedType : null;
     }
 
-    // Validación estricta de campos vacíos
+    // 1. Verificar si hay campos sin evaluar
     let formIncompleto = false;
     appData.categories.forEach(cat => {
         cat.items.forEach(item => {
@@ -159,10 +159,29 @@ function saveEvaluation() {
         });
     });
 
+    // 2. Si hay campos vacíos, lanzar advertencia de confirmación
     if (formIncompleto) {
-        return showToast("⚠️ Error: Debes calificar todas las opciones (Presencia o Ausencia) antes de guardar.");
+        const confirmacion = confirm("⚠️ Tienes ítems sin marcar.\n\nTodo lo que no hayas marcado se registrará automáticamente como AUSENCIA (0).\n\n¿Deseas confirmar y guardar ahora, o cancelar para revisar?");
+        
+        // Si el usuario cancela, detenemos el guardado para que siga evaluando
+        if (!confirmacion) {
+            return; 
+        }
     }
 
+    // 3. Completar automáticamente los ítems omitidos como "Ausencia" para no romper los reportes
+    appData.categories.forEach(cat => {
+        cat.items.forEach(item => {
+            if (!currentEvaluation.data[item.id] || currentEvaluation.data[item.id].presence === undefined) {
+                currentEvaluation.data[item.id] = {
+                    presence: false,
+                    severity: null
+                };
+            }
+        });
+    });
+
+    // 4. Proceder con el guardado normal
     appData.evaluations.push(currentEvaluation);
     saveData();
     showToast("✅ Árbol guardado correctamente en su sector");
